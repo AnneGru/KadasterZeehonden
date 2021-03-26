@@ -1,13 +1,12 @@
 # test script
 # 18 march '21 Anne Grundlehner
-setwd("/Users/Anne/Documents/Internship WMR zeehonden/Data Analyses")
-
 
 #https://www.r-graph-gallery.com/325-background-map-from-geojson-format-in-r.html
 #import and plot annotations testfile geojson
 library(sp)
 library(rgdal)
 library(raster)
+library(plotrix)
 
 #### Basics ####
 #plot
@@ -31,7 +30,7 @@ hist(test.json$area_m2) #distribution of seal sizes (surface area m2)
 # https://rpubs.com/dgolicher/9458
 library(sp)
 library(rgeos) #edge to edge distances)
-install.packages("sf")
+#install.packages("sf")
 library(sf)
 library(spdep) #for distance matrix
 
@@ -105,7 +104,7 @@ head(areafraction.of.radius)
 hist(as.matrix(areafraction.of.radius))
 
 #### Randomisation ####
-install.packages("spatstat")
+#install.packages("spatstat")
 library(spatstat)
 
 ## Generating a bounding box around our polygons
@@ -141,7 +140,7 @@ axis(2)
 simulations = test.json
 sp = SpatialPoints(test.json) #make polygondataframe into spatialpoints object
 class(rpoints)
-draw.ellipse()
+#draw.ellipse()
 ## Shift the original polygons to the new locations
 ## change their centroid points?
 #or create ellipse around the points
@@ -178,10 +177,11 @@ plot(test.json[1,], axes=TRUE)
 plot(polygons.shifted[1], axes=T)
 # create a for-loop
 
-polygons.shifted = test.json[1,]
+#polygons.shifted = test.json[1,]
+polygons.shifted = test.json
 
 for (i in 1:length(test.json)){
-  polygons.shifted[1,] = elide(test.json[i,], shift=c(dx[i], dy[i]))
+  polygons.shifted[i] = elide(test.json[i,], shift=c(dx[i], dy[i]))
 }
 
 all.polys = test.json[1,]
