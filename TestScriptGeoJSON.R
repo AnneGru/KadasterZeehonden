@@ -177,12 +177,17 @@ plot(test.json[1,], axes=TRUE)
 plot(polygons.shifted[1], axes=T)
 # create a for-loop
 
-#polygons.shifted = test.json[1,]
-polygons.shifted = test.json
-
-for (i in 1:length(test.json)){
-  polygons.shifted[i] = elide(test.json[i,], shift=c(dx[i], dy[i]))
-}
+# Create empty polygonsdataframe
+  polygons.shifted = test.json[0,]
+  length(polygons.shifted)
+  
+# Use elide to change possition and bind to add them to existing polygonsdataframe
+  for (i in 1:length(test.json)){
+    polygons.shifted = bind(polygons.shifted,elide(test.json[i,], shift=c(dx[i], dy[i])))
+  }
+  length(polygons.shifted)
+  length(test.json)
+  
 
 all.polys = test.json[1,]
 for (i in 1:length(test.json[i,])){
