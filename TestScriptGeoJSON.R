@@ -8,6 +8,71 @@ library(rgdal)
 library(raster)
 library(plotrix)
 
+
+
+#### Problematisch stuk vd schone pipeline ####
+#Install packages
+library(raster)
+library(readr)
+library(rgdal)
+library(sp)
+library(sf)
+library(rgeos)
+library(spdep)
+library(plotrix)
+library(spatstat)
+
+# trial on Rottumeroog (= 1 image)
+annotations = readOGR("annotations_19_236250_617250.geojson")
+coastline1 = readOGR("coastline_rottumeroog_1.geojson")
+
+#Step 1: Create sampling space (convex hull)
+nf <- spTransform(annotations, CRS("+init=epsg:27700")) 
+chull.nf <- gConvexHull(nf) #nf is the CRS-transformed version of annotations file
+
+# Plot and check if coastline overlaps with sampling space:
+plot(nf, axes=T, main="sampling space Rottumeroog")
+plot(chull.nf, axes=T, add=TRUE, border="coral")
+plot(coastline1, add=TRUE, border="blue", col="blue")
+# if overlap, remove overlapping part == not necessary for this file
+
+# Step 2: generate random points within sampling space (=chull)]
+#crs format of nf 
+rpoints <-spsample(chull,n=length(nf),type="random") #generate random points
+plot(rpoints, pch=19)
+
+#calculate dx and dy
+chull.nf = gConvexHull(nf)
+rpoints.nf <-spsample(chull.nf,n=length(nf),type="random") #generate random points
+plot(rpoints.nf, pch=19, axes=T)
+plot(chull.nf, add=T) #cheack if points are generated within the chull sampling space
+centroids.nf = coordinates(nf) #center points of our annoated polygons
+dx = centroids.nf[,1] - rpoints.nf[,1]
+dy = centroids.nf[,2] - rpoints.nf[,2]
+# CHECK
+plot(centroids.nf)
+plot(chull.nf, add=T)
+plot(rpoints.nf, add=T, col="blue")
+
+# Create empty polygonsdataframe
+polygons.shifted = nf[0,]
+length(nf)
+# Use elide to change position and bind to add them to existing polygonsdataframe
+for (i in 1:length(nf)){
+  polygons.shifted = bind(polygons.shifted, elide(nf[i,], shift=c(dx[i], dy[i])))
+}
+#check if they are not located in the sampling space --> PROBLEM
+plot(polygons.shifted, axes=T)
+plot(chull.nf, add=T)
+#convert coastline to correct crs format
+coastline1.nf <- spTransform(coastline1, CRS("+init=epsg:27700"))
+#check if not located in sea
+plot(coastline1.nf, add=T, col="blue") 
+
+## ----- End of problematic part ------
+
+
+
 #### Basics ####
 #plot
 test.json = readOGR("copy-of-greyseals2_10-02-21_1228.geojson")
