@@ -21,6 +21,7 @@ library(rgeos)
 library(spdep)
 library(plotrix)
 library(spatstat)
+library(maptools)
 
 # trial on Rottumeroog (= 1 image)
 annotations = readOGR("annotations_19_236250_617250.geojson")
@@ -38,7 +39,7 @@ plot(coastline1, add=TRUE, border="blue", col="blue")
 
 # Step 2: generate random points within sampling space (=chull)]
 #crs format of nf 
-rpoints <-spsample(chull,n=length(nf),type="random") #generate random points
+rpoints <-spsample(chull.nf,n=length(nf),type="random") #generate random points
 plot(rpoints, pch=19)
 
 #calculate dx and dy
@@ -47,8 +48,8 @@ rpoints.nf <-spsample(chull.nf,n=length(nf),type="random") #generate random poin
 plot(rpoints.nf, pch=19, axes=T)
 plot(chull.nf, add=T) #cheack if points are generated within the chull sampling space
 centroids.nf = coordinates(nf) #center points of our annoated polygons
-dx = centroids.nf[,1] - rpoints.nf[,1]
-dy = centroids.nf[,2] - rpoints.nf[,2]
+dx =  coordinates(rpoints.nf)[,1] - centroids.nf[,1]
+dy =  coordinates(rpoints.nf)[,2] - centroids.nf[,2]
 # CHECK
 plot(centroids.nf)
 plot(chull.nf, add=T)
@@ -62,7 +63,7 @@ for (i in 1:length(nf)){
   polygons.shifted = bind(polygons.shifted, elide(nf[i,], shift=c(dx[i], dy[i])))
 }
 #check if they are not located in the sampling space --> PROBLEM
-plot(polygons.shifted, axes=T)
+plot(polygons.shifted, axes=T,col="grey")
 plot(chull.nf, add=T)
 #convert coastline to correct crs format
 coastline1.nf <- spTransform(coastline1, CRS("+init=epsg:27700"))
