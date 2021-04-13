@@ -4,12 +4,6 @@
 
 # final pipeline to create datasheet
 
-#### To do ####
-# Radius uitschrijven
-# correctie voor pups verwerken
-# ?? radius info voor rndm points?
-## plaatjes saven
-# histogrammen maken -- OF in statistiek scriptje
 
 #### Install packages ####
 library(raster)
@@ -25,6 +19,209 @@ library(simukde)
 library(maptools)
 
 #### Import annotations ####
+
+#Richel, images:1
+setwd("~/Documents/Internship WMR zeehonden/Data Analyses/Richel_annotaties_7/2019_136500_589500_rgb_hrl")
+image1 = readOGR("annotations_19_136500_589500.geojson")
+#filename1 = "2019_136500_589500_rgb_hrl"
+coastline1=readOGR("coastline_19_136500_589500.geojson")
+#region = "richel"
+#resolution = "7.5 cm"
+#species = "pv"
+
+#### Basic info + Prepare ####
+# 1) Merge all files from a particular region
+annotations = image1 # + image2 + image3 + image4
+plot(annotations, axes=T) # check
+nf <- spTransform(annotations, CRS("+init=epsg:27700")) #set proper crs
+coastline <- spTransform(coastline1, CRS("+init=epsg:27700"))
+
+
+#### (3) Shift polygons ####
+    #basic loop that works:
+#polygons.shifted = nf[0,]
+#for (i in 1:length(nf)){
+#      polygons.shifted = bind(polygons.shifted, elide(nf[i,], shift=c(dx[i], dy[i])))
+#}
+
+#### Rotate & shift untill no intersect ####
+# similar loop, but preventing overlap ##draft!!
+  # Check intersection
+  # rotate & check, rotate & check, .. until correct
+  # check
+  # move & check, move & check, until correct
+#polygons.shifted = nf[0,]
+    
+# Zo zou het er ongeveer uit moeten zien in grove lijnen:
+#for (i in 1:length(nf)){
+     # polygons.shifted = bind(polygons.shifted, elide(nf[i,], shift=c(dx[i], dy[i]))).
+    #  if(intersect(polygons.shifted) == T) #intersect? eerst roteren, niet verplaatsen
+    #  polygons.shifted = bind(polygons.shifted, elide(nf[i,], shift=c(0,0), theta =180 ))
+    #  if() #nog steeds intersect? random verplaatsen tussen -x en x, uniforme 
+    #  polygons.shifted = bind(polygons.shifted, elide(nf[i,], shift=c(runif(1, min = -10, max = 10), runif(1, min = -10, max = 10))))
+} ## voorhet roteren en moven "until intersect=F" kunnen we repeat functies schrijven
+
+
+# ----------------------------------------
+#Create functions to repeat rotation and movement until no interesection
+#insert these functions into the "shift polygons" for-loop 
+
+
+#### TEST STUKJES CODE DIE MOETEN WERKEN, GEBRUIK 2 TEST POLY's ####
+
+#create 2 simple test poly's
+poly.test = nf[4:5,]
+plot(poly.test, axes = T)
+## 1 Test rotation loop, rotate around centerpoint - WORKS
+poly.test.rotate=poly.test
+poly.test.rotate = elide(poly.test[1,], shift=c(0,0), rotate = 90,
+                        center=coordinates(poly.test[1,])) ## LET OP 
+plot(poly.test, axes=T)
+plot(poly.test.rotate, add=T, border="red")
+
+## loop ROTATE 90 degr "IF INTERSECT" - WORKS
+test1 = st_as_sf(poly1) #transform objects you have so far to sf to be able to check if they intersect
+test2 = st_as_sf(poly2)
+test1.c = st_set_crs(test1, value=st_crs(test2))
+
+#st_intersects(test1.c, test2, sparse=F) #line that checks if there is an intersection
+
+if(st_intersects(test1.c, test2, sparse=F) == TRUE)
+  {  #do_something(); #rotate 
+  poly1.rot = elide(poly1, shift=c(0,0), rotate = 90, # als ze overlappen, 1x kwartslag draaien
+        center=coordinates(poly1)) ## LET OP
+}
+#check if it worked:
+plot(poly1.rot, axes=T) #WORKS
+
+## move 10 cm if intersects WORKS
+if(st_intersects(test1.c, test2, sparse=F) == TRUE)
+{  #do_something(); #rotate 
+  poly1.move = elide(poly1, shift=c(0.1, 0.1), rotate = 0,
+                    center=coordinates(poly1)) ## LET OP
+}
+
+# 2 LOOP move if with 10 cm IF intersects WORKS --> we need to fix choice between -x / x, -y, y
+dir = c(-1, 1) #create vector with directions
+if(st_intersects(test1.c, test2, sparse=F) == TRUE)
+{  #do_something(); #MOVE 
+  dirx = sample(dir,size=1, replace=T) #  direction +- for x
+  diry = sample(dir,size=1, replace=T) # set direction +- for y
+  # alternetively to runif, you could just do dx/dy * 10 cm to take constant steps
+  poly1.move = elide(poly1, shift=c(dirx*runif(1, min=0, max=0.1),diry*runif(1, min=0, max=0.1)), rotate = 0,
+                     center=coordinates(poly1)) ## LET OP
+}
+
+# plot to check the result
+plot(poly1, axes=T)
+plot(poly1, axes=T)
+plot(poly1.move, add=T, border="red")
+
+# ------->>> HERE FOLLOWS THE PROBLEM
+#### REPEAT function for moving if intersect - move #### 
+## Rotate if intersect TEST
+## create 2 intersecting polys:
+#gDistance(poly.test[1,], poly.test[2,]) #check distance
+overlap.test.polys = poly.test
+overlap.test.poly1 = elide(poly.test[1,], shift=c(5.5, 0)) #shift 1 poly so that it overlaps the other
+poly1 = elide(poly.test[1,], shift=c(5.5, 0), center=coordinates(poly.test[1,]))
+poly2 = poly.test[2,]
+#check if you have 2 overlapping polys now for the test
+plot(poly1, axes=T)
+plot(poly2, add=T, border="red")
+
+test1 = st_as_sf(poly1) #transform objects you have so far to sf, to be able to check intersection
+test2 = st_as_sf(poly2)
+test1.c = st_set_crs(test1, value=st_crs(test2))
+st_intersects(test1.c, test2, sparse=F) #test if they intersect
+
+# .. if(st_intersects(test1.c, test2, sparse=F) == TRUE) .. 
+dir = c(-1, 1) #pick constant direction
+dirx = sample(dir,size=1, replace=T) # set a fixed direction + or - for x
+diry = sample(dir,size=1, replace=T) # set direction +- for y
+
+# put in loop with if intersect test1.c test2 ...
+test2 = st_as_sf(poly2)
+repeat.move.loop <- function(poly1, test2, dirx, diry) {
+  poly = poly1 #start with original poly1
+  repeat {
+    poly = poly1.moved #new round should be done with the moved poly
+    #do_something(); MOVE with steps of 10 cm
+      poly1.moved = elide(poly, shift=c(dirx*0.1, diry*0.1), rotate = 0,
+                         center=coordinates(poly)) ## LET OP
+      test1.moved = st_as_sf(poly1.moved) #transform objects you have so far to sf
+      test1.c.moved = st_set_crs(test1.moved, value=st_crs(test2)) 
+      poly = poly1.moved #new round should be done with the moved poly
+      # exit if the condition is met:
+    if (st_intersects(test1.c.moved, test2, sparse=F) == FALSE) break
+  final.poly = poly
+  return(final.poly)
+  }
+}
+poly = repeat.move.loop(poly1, test2, dirx, diry)
+
+#CHECK:
+plot(poly, border="red") #moved polygon
+plot(poly1, add=T) #original location
+plot(poly2, add=T) ## polygon intersected - Nog steeds intersection??
+
+
+#### REPEAT LOOP 2 - rotate NEEDS EDITS ####
+degrees = c(seq(10,360, by=10))
+repeat.rot.loop <- function(x) {
+  repeat {
+    #do something: rotate 
+    for (j in 1:length(degrees)){
+    poly1.rot = elide(poly1, shift=c(0,0), rotate = degrees[j],
+                        center=coordinates(poly1))
+    }
+    # exit if the condition is met:
+    if (st_intersects(poly1.rot, poly2, sparse=F) == FALSE) break
+    if (j == length(degrees)) break
+  }
+  return(poly.rot)
+}
+
+
+
+# draft codes & tests / fragments of the code ---------------------------------------------------------
+poly1.moved = elide(poly1, shift=c(dirx*runif(1, min=0, max=0.1),diry*runif(1, min=0, max=0.1)), rotate = 0,
+                    center=coordinates(poly1)) ## LET OP
+test1.moved = st_as_sf(poly1.moved) #transform objects you have so far to sf
+test2 = st_as_sf(poly2)
+test1.c = st_set_crs(test1.moved, value=st_crs(test2))
+plot(poly1.moved)
+
+# ===> use this created function in loop:
+if(st_intersects(poly.sf[i,], poly.sf[-i,], sparse=F) == TRUE) #if they intersect
+{  #do_something(); #move randomly with max 10 cm steps
+  repeat.move.loop(poly.sf[i])
+}
+
+
+
+# -------------
+
+
+#### (4) Calculate NNDs ####
+#dist mat
+nnd.kde = nnd.kde
+#### (5) add to datasheet ####
+datasheet5 = cbind(datasheet4, nnd.kde, nnd.chull, nnd.unif)
+    
+#### (6) Histogram  ####
+# can also be done in statistics script
+# to compare random vs real data
+
+
+### removed script
+#### To do ####
+# Radius uitschrijven
+# correctie voor pups verwerken
+# ?? radius info voor rndm points?
+## plaatjes saven
+# histogrammen maken -- OF in statistiek scriptje
+
 #Rottumeroog, images:1
 setwd("~/Documents/Internship WMR zeehonden/Data Analyses/Rottumeroog_annotaties_7/2019_236250_617250_rgb_hrl/2019_236250_617250_rgb_hrl")
 image1 = readOGR("annotations_19_236250_617250.geojson")
@@ -44,15 +241,6 @@ region = "Rif"
 resolution = "10 cm"
 species = "species"
 #date = "image_date"
-
-#Richel, images:1
-setwd("~/Documents/Internship WMR zeehonden/Data Analyses/Richel_annotaties_7/2019_136500_589500_rgb_hrl")
-image1 = readOGR("annotations_19_136500_589500.geojson")
-filaneme1 = "2019_136500_589500_rgb_hrl"
-coastline1=readOGR("coastline_19_136500_589500.geojson")
-region = "richel"
-resolution = "7.5 cm"
-species = "pv"
 
 #Rottumerplaat, images:2, coastline files:1
 image1=
@@ -95,13 +283,6 @@ species = "pv"
 #resolution = "10 cm"
 #species = "species"
 #date = "image_date"
-
-#### Basic info + Prepare ####
-# 1) Merge all files from a particular region
-annotations = image1 # + image2 + image3 + image4
-plot(annotations, axes=T) # check
-nf <- spTransform(annotations, CRS("+init=epsg:27700")) #set proper crs
-coastline <- spTransform(coastline1, CRS("+init=epsg:27700"))
 
 # Basic info !!!! EDIT MANUALLY WHEN RUNNING NEXT REGION
 year = "2019"
@@ -151,7 +332,6 @@ category = as.data.frame(category)
 datasheet.base = cbind(sealID.per.image, seal.surface, region.v, species.v, image.filename, resolution.v, year.v, image.of.region, category )
 region.info = cbind(region, resolution, indiv.in.region)
 colnames(datasheet.base) <- c("seal ID (per region)","seal surface area (m2)", "region", "species", "image filename", "resolution", "year", "imageID (per region)", "category" )
-
 
 #### Distance matrix ####
 # once per region
@@ -230,8 +410,19 @@ colnames(radius.m2fraction) = c("fraction occupied surface area within 10m", "fr
 radius.info = cbind(radius.n, radius.m2fraction)
 datasheet4 = cbind(datasheet3, radius.info) #add to datasheet
 
+#### 2b = random punten binnen chull ####
+chull <- gConvexHull(nf)
+rpoints.chull <-spsample(chull,n=length(nf),type="random") #generate random points
+plot(rpoints.chull, pch=19, axes=T, cex=0.3)
+    ## Plot and check if coastline overlaps with sampling space:
+    plot(nf, axes=T, main="sampling space Rottumeroog")
+    plot(chull, axes=T, add=TRUE, border="coral")
+    plot(coastline1, add=TRUE, border="blue", col="blue")
+
+
+
 #### RANDOMISATIE ####
-# (1) Kernel density plot
+# (1) Kernel density plot (large window)
 extent.nf = extent(coastline) ## better use extent of coastline
 W = owin(c(extent.nf@xmin, extent.nf@xmax), c(extent.nf@ymin, extent.nf@ymax)) # set window
 centroids.nf = (coordinates(nf)) # create ppp object using dataframe of seal center points
@@ -301,178 +492,4 @@ for(i in 1:length(nf)){
 
 plot(centroids.nf, main="bw=bw")
 points(sam.x, sam.y, col="blue")
-
-
-#### 2b = random punten binnen chull ####
-chull <- gConvexHull(nf)
-rpoints.chull <-spsample(chull,n=length(nf),type="random") #generate random points
-plot(rpoints.chull, pch=19, axes=T, cex=0.3)
-    ## Plot and check if coastline overlaps with sampling space:
-    plot(nf, axes=T, main="sampling space Rottumeroog")
-    plot(chull, axes=T, add=TRUE, border="coral")
-    plot(coastline1, add=TRUE, border="blue", col="blue")
     
-
-#### (3) Shift polygons ####
-    #basic loop:
-polygons.shifted = nf[0,]
-for (i in 1:length(nf)){
-      polygons.shifted = bind(polygons.shifted, elide(nf[i,], shift=c(dx[i], dy[i])))
-}
-
-#### Rotate & shift untill no intersect ####
-# similar loop, but preventing overlap ##draft!!
-  # Check intersection
-  # rotate & check, rotate & check, .. until correct
-  # check
-  # move & check, move & check, until correct
-polygons.shifted = nf[0,]
-    
-# Zo zou het er ongeveer uit moeten zien in grove lijnen:
-for (i in 1:length(nf)){
-      polygons.shifted = bind(polygons.shifted, elide(nf[i,], shift=c(dx[i], dy[i]))).
-      if(intersect(polygons.shifted) == T) #intersect? eerst roteren, niet verplaatsen
-      polygons.shifted = bind(polygons.shifted, elide(nf[i,], shift=c(0,0), theta =180 ))
-      if() #nog steeds intersect? random verplaatsen tussen -x en x, uniforme 
-      polygons.shifted = bind(polygons.shifted, elide(nf[i,], shift=c(runif(1, min = -10, max = 10), runif(1, min = -10, max = 10))))
-} ## voorhet roteren en moven "until intersect=F" kunnen we repeat functies schrijven
-
-
-# ----------------------------------------
-#Create functions to repeat rotation and movement until no interesection
-#insert these functions into the "shift polygons" for-loop 
-
-#### REPEAT - rotate ####
-degrees = c(seq(10,360, by=10))
-repeat.rot.loop <- function(x) {
-  repeat {
-    #do something: rotate 
-    for (j in 1:length(degrees)){
-    poly1.rot = elide(poly1, shift=c(0,0), rotate = degrees[j],
-                        center=coordinates(poly1))
-    }
-    # exit if the condition is met:
-    if (st_intersects(poly1.rot, poly2, sparse=F) == FALSE) break
-    if (j == length(degrees)) break
-  }
-  return(poly.rot)
-}
-
-#### REPEAT - move ####
-## 2 Rotate if intersect TEST
-## create 2 intersecting polys:
-gDistance(poly.test[1,], poly.test[2,])
-overlap.test.polys = poly.test
-overlap.test.poly1 = elide(poly.test[1,], shift=c(5.5, 0))
-poly1 = elide(poly.test[1,], shift=c(5.5, 0), center=coordinates(poly.test[1,]))
-poly2 = poly.test[2,]
-#check
-plot(poly1, axes=T)
-plot(poly2, add=T, border="red")
-
-test1 = st_as_sf(poly1) #transform objects you have so far to sf
-test2 = st_as_sf(poly2)
-test1.c = st_set_crs(test1, value=st_crs(test2))
-st_intersects(test1.c, test2, sparse=F) #test if they intersect
-
-# .. if(st_intersects(test1.c, test2, sparse=F) == TRUE) .. 
-dir = c(-1, 1) #pick constant direction
-dirx = sample(dir,size=1, replace=T) #  direction +- for x
-diry = sample(dir,size=1, replace=T) # set direction +- for y
-
-# put in loop with if intersect test1.c test2 ...
-test2 = st_as_sf(poly2)
-repeat.move.loop <- function(poly1, test2, dirx, diry) {
-  poly = poly1 #start with original poly1
-  repeat {
-    poly = poly1.moved #new round should be done with the moved poly
-    #do_something(); MOVE with steps of 10 cm
-      poly1.moved = elide(poly, shift=c(dirx*0.1, diry*0.1), rotate = 0,
-                         center=coordinates(poly)) ## LET OP
-      test1.moved = st_as_sf(poly1.moved) #transform objects you have so far to sf
-      test1.c.moved = st_set_crs(test1.moved, value=st_crs(test2)) 
-      poly = poly1.moved #new round should be done with the moved poly
-      # exit if the condition is met:
-    if (st_intersects(test1.c.moved, test2, sparse=F) == FALSE) break
-  final.poly = poly
-  return(final.poly)
-  }
-}
-poly = repeat.move.loop(poly1, test2, dirx, diry)
-plot(poly, border="red") #moved polygon
-plot(poly1, add=T) #original location
-plot(poly2, add=T) ## polygon intersected - Nog steeds intersection??
-
-# draft codes & tests / fragments of the code ---------------------------------------------------------
-poly1.moved = elide(poly1, shift=c(dirx*runif(1, min=0, max=0.1),diry*runif(1, min=0, max=0.1)), rotate = 0,
-                    center=coordinates(poly1)) ## LET OP
-test1.moved = st_as_sf(poly1.moved) #transform objects you have so far to sf
-test2 = st_as_sf(poly2)
-test1.c = st_set_crs(test1.moved, value=st_crs(test2))
-plot(poly1.moved)
-
-# ===> use this created function in loop:
-if(st_intersects(poly.sf[i,], poly.sf[-i,], sparse=F) == TRUE) #if they intersect
-{  #do_something(); #move randomly with max 10 cm steps
-  repeat.move.loop(poly.sf[i])
-}
-
-#### TESTS ####
-#create 2 simple test poly's
-poly.test = nf[4:5,]
-plot(poly.test, axes = T)
-## 1 Test rotation loop, rotate around centerpoint
-poly.test.rotate=poly.test
-poly.test.rotate = elide(poly.test[1,], shift=c(0,0), rotate = 90,
-                        center=coordinates(poly.test[1,])) ## LET OP 
-plot(poly.test, axes=T)
-plot(poly.test.rotate, add=T, border="red")
-
-
-# 3 loop ROTATE 90 degr IF INTERSECT /  WORKS
-test1 = st_as_sf(poly1) #transform objects you have so far to sf
-test2 = st_as_sf(poly2)
-test1.c = st_set_crs(test1, value=st_crs(test2))
-st_intersects(test1.c, test2, sparse=F)
-if(st_intersects(test1.c, test2, sparse=F) == TRUE)
-  {  #do_something(); #rotate 
-  poly1.rot = elide(poly1, shift=c(0,0), rotate = 90,
-        center=coordinates(poly1)) ## LET OP
-}
-#check
-plot(poly1.rot, axes=T) #works :D
-
-# 1 move 10 cm if intersects WORKS
-if(st_intersects(test1.c, test2, sparse=F) == TRUE)
-{  #do_something(); #rotate 
-  poly1.move = elide(poly1, shift=c(0.1, 0.1), rotate = 0,
-                    center=coordinates(poly1)) ## LET OP
-}
-# 2 LOOP move if within 10 cm UNIF IF intersects WORKS --> we need to fix choice between -x / x, -y, y
-dir = c(-1, 1) #create vector with directions
-if(st_intersects(test1.c, test2, sparse=F) == TRUE)
-{  #do_something(); #MOVE 
-  dirx = sample(dir,size=1, replace=T) #  direction +- for x
-  diry = sample(dir,size=1, replace=T) # set direction +- for y
-  # alternetively to runif, you could just do dx/dy * 10 cm to take constant steps
-  poly1.move = elide(poly1, shift=c(dirx*runif(1, min=0, max=0.1),diry*runif(1, min=0, max=0.1)), rotate = 0,
-                     center=coordinates(poly1)) ## LET OP
-}
-
-# plot to check
-plot(poly1, axes=T)
-plot(poly1, axes=T)
-plot(poly1.move, add=T, border="red")
-
-
-#### (4) Calculate NNDs ####
-#dist mat
-nnd.kde = nnd.kde
-#### (5) add to datasheet ####
-datasheet5 = cbind(datasheet4, nnd.kde, nnd.chull, nnd.unif)
-    
-#### (6) Histogram  ####
-# can also be done in statistics script
-# to compare random vs real data
-
-
