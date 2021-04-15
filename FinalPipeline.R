@@ -36,7 +36,161 @@ plot(annotations, axes=T) # check
 nf <- spTransform(annotations, CRS("+init=epsg:27700")) #set proper crs
 coastline <- spTransform(coastline1, CRS("+init=epsg:27700"))
 
+#### RANDOMISATIE ####
+# (1) Kernel density plot
+extent.nf = extent(coastline) ## better use extent of coastline
+W = owin(c(extent.nf@xmin, extent.nf@xmax), c(extent.nf@ymin, extent.nf@ymax)) # set window
+centroids.nf = (coordinates(nf)) # create ppp object using dataframe of seal center points
+ppp.nf = as.ppp(centroids.nf, W=W)
+#Bandwidth
+#bw.weighedavg = (3.555339*n.anno.noorderhaaks+3.884186*n.anno.goedereede+2.95668*n.anno.dollard+2.192761*n.anno.renesse+2.691878*n.anno.simon+3.106699*n.anno.rotoog + 3.453626*n.anno.rotplaat+3.453626*n.anno.richel +1.110375*n.anno.rif + 2.682958*n.anno.engelhoek)/(n.anno.noorderhaaks+n.anno.goedereede+n.anno.dollard+n.anno.renesse+n.anno.simon+n.anno.rotoog +n.anno.rotplaat+n.anno.richel +n.anno.rif +n.anno.engelhoek)
+bw.weighedavg = 3.060091
+bandwidth.x = bw.weighedavg
+bandwidth.y = bw.weighedavg
+k.density = spatstat.core::densityfun(ppp.nf, kernel="gaussian", sigma=bw.weighedavg) #you can add sigma=...
+# plot
+plot(k.density, axes=T, cex.axis=0.8, las = 1)
+plot(coastline, add=T, col="white")
 
+# (1b) Create plot with smaller window (bbox)
+# extent = bbox extent + 10 m
+bbox.nf2 = extent(bbox(nf)) + 10
+extent.nf.b = extent(bbox.nf2)
+W.box = owin(c(extent.nf.b@xmin, extent.nf.b@xmax), c(extent.nf.b@ymin, extent.nf.b@ymax))
+ppp.nf.bbox = as.ppp(centroids.nf, W=W.box)
+k.density.bbox = density(ppp.nf.bbox, sigma=bw.weighedavg)
+# plot
+plot(k.density.bbox, axes=T, cex.axis=0.8, las = 1, main="Kernel density bw=5")
+plot(coastline, add=T, col="white")
+
+#### Kernel density sampling ####
+# x en y seperately samplen, both from the region around the same datapoint
+plot(centroids.nf) #original datapoints
+N = length(nf) #number of simulations
+centroids.x = centroids.nf[,1] #subset x
+centroids.y = centroids.nf[,2] #subset y
+#hist(centroids.x, prob=T, breaks = 50)
+#lines(density(centroids.x), col="blue") #plot density x
+#hist(centroids.y, prob=T, breaks=50)
+#lines(density(centroids.y), col="blue") #plot density y
+
+
+#### SAMPLING  KDE ####
+## draw new point in the original point it's OWN KERNEL
+# SD = BW (use result bw.diggle, use 1 value for all regions), normal distr. 
+x = matrix(ncol=1, nrow=length(nf)) #empty vector to store sampled data-point
+sam.x = matrix(ncol=1, nrow=length(nf)) #empty vector to store new coords
+for(i in 1:length(nf)){
+  x[i,] <- centroids.x[i] # randomly sample one of the centroids
+  sam.x[i,] <- rnorm(1, x[i,], sd=bandwidth.x) #pick a random location on it's kernel
+}
+y = matrix(ncol=1, nrow=length(nf)) #empty vector to store sampled data-point
+sam.y = matrix(ncol=1, nrow=length(nf)) #empty vector to store new coords
+for(i in 1:length(nf)){
+  y[i,] <- centroids.y[i] # randomly sample one of the centroids
+  sam.y[i,] <- rnorm(1, y[i,], sd=bandwidth.y) #pick a random location on it's kernel
+}
+#plot the sampled points
+plot(centroids.nf, main="bw=bw")
+points(sam.x, sam.y, col="blue")
+
+#new points
+rpoints.kde = cbind(sam.x, sam.y)
+
+#### Move Polgyons ####
+#basic loop for shifting:
+#polygons.shifted = nf[0,]
+#for (i in 1:length(nf)){
+#      polygons.shifted = bind(polygons.shifted, elide(nf[i,], shift=c(dx[i], dy[i])))
+#}
+#plot(polygons.shifted)
+#plot(nf, add=T, border="grey")
+
+# Creating test poly's
+#test1 = st_as_sf(poly1) #transform objects you have so far to sf
+#test2 = st_as_sf(poly2)
+#test1.c = st_set_crs(test1, value=st_crs(test2))
+
+# Create function for rotation (WORKS)
+degrees = c(seq(10,360, by=10))
+# if...intersect
+repeat.rot.fun <- function(poly1, test2, degrees) {
+      poly = poly1 #start with original poly1
+      counter=0
+      repeat {
+        #do_something(); rotate
+        for (j in 1:length(degrees)) {
+          poly1.moved = elide(poly, shift=c(0,0), rotate = degrees[j],
+                              center=coordinates(poly)) ## LET OP
+          test1.moved = st_as_sf(poly1.moved) #transform objects you have so far to sf
+          test1.c.moved = st_set_crs(test1.moved, value=st_crs(test2))
+          poly = poly1.moved #new round should be done with the moved poly
+          # exit if the condition is met or if all 360 degrees were attempted (it will automatically after for-loop ends)
+          if (st_intersects(test1.c.moved, test2, sparse=F) == FALSE) break}
+        if (st_intersects(test1.c.moved, test2, sparse=F) == FALSE) break # nog een break om uit de REPEAT te komen
+     }
+    final.rot.poly = poly
+    return(final.rot.poly)
+}
+    
+# Create function for movement with 10cm steps until no intersection (WORKS)
+dir = c(-1, 1) #pick constant direction (independent for each polygon)
+degrees = c(seq(10,360, by=10))
+dirx = sample(dir,size=1, replace=T) # set a fixed direction + or - for x
+diry = sample(dir,size=1, replace=T) # set direction +- for y
+repeat.move.fun <- function(poly1, test2, dirx, diry) {
+      poly = poly1 #start with original poly1
+      counter=0
+      repeat {
+        #poly = poly1.moved #new round should be done with the moved poly
+        #do_something(); MOVE with steps of 10 cm
+        poly1.moved = elide(poly, shift=c(dirx*0.1, diry*0.1), rotate = 0,
+                            center=coordinates(poly)) ## LET OP
+        test1.moved = st_as_sf(poly1.moved) #transform objects you have so far to sf
+        test1.c.moved = st_set_crs(test1.moved, value=st_crs(test2))
+        poly = poly1.moved #new round should be done with the moved poly
+        # exit if the condition is met:
+        if (st_intersects(test1.c.moved, test2, sparse=F) == FALSE) break}
+      final.poly = poly
+      return(final.poly)
+}
+    
+
+#### final movement loop ####
+# Before looping set parameters
+centroids.nf = coordinates(nf) #center points of our annoated polygons
+dx =  coordinates(rpoints.kde)[,1] - centroids.nf[,1]
+dy =  coordinates(rpoints.kde)[,2] - centroids.nf[,2]
+polygons.shifted = nf[0,]
+dir = c(-1, 1) #pick constant direction
+
+## THIS LOOP NEEDS TO BE FIXED:
+for (i in 1:length(nf)){
+  focal.poly = elide(nf[i,], shift=c(dx[i], dy[i])) #move next poly
+  #create variables for checking/avoiding intersection:
+  for (k in 1:length(polygons.shifted)){ #intersection should be tested with each already moved polygon seperately
+  poly1 = polygons.shifted[k-1,] #already fixed polygons: polygons.shifted[-i,]
+  poly2 = focal.poly[i] #polygons.shifted[i,]
+  test1 = st_as_sf(poly1)
+  test2 = st_as_sf(poly2)
+  test2.c = st_set_crs(test2, value=st_crs(test1))
+  #move through if() loops
+    if(st_intersects(test1, test2.c, sparse=F) == TRUE){
+      focal.poly = repeat.rot.fun(poly1, test2.c, degrees) #returns only moved/focal object
+    }
+    if (st_intersects(test1, test2.c, sparse=F) == TRUE){
+      dirx = sample(dir, size=1, replace=T) # set a fixed direction + or - for x
+      diry = sample(dir, size=1, replace=T) # set direction +- for y
+      focal.poly = repeat.rot.fun(poly1, test2.c, dirx, diry) #returns only the moved/focal object
+    }}
+  #bind new polygon to the others:
+  polygons.shifted = bind(polygons.shifted, focal.poly) #bind old & new poly's
+}
+
+
+
+
+## ----------------------------------------
 #### (3) Shift polygons ####
     #basic loop that works:
 #polygons.shifted = nf[0,]
