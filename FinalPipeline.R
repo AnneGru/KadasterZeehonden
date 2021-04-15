@@ -169,11 +169,11 @@ for (i in 1:length(nf)){
   focal.poly = elide(nf[i,], shift=c(dx[i], dy[i])) #move next poly
   #create variables for checking/avoiding intersection:
   for (k in 1:length(polygons.shifted)){ #intersection should be tested with each already moved polygon seperately
-  poly1 = polygons.shifted[k-1,] #already fixed polygons: polygons.shifted[-i,]
+  poly1 = polygons.shifted[k,] #maybe [,] or [k-1] ? #already fixed polygons: polygons.shifted[-i,]
   poly2 = focal.poly[i] #polygons.shifted[i,]
   test1 = st_as_sf(poly1)
   test2 = st_as_sf(poly2)
-  test2.c = st_set_crs(test2, value=st_crs(test1))
+  test2.c = st_set_crs(test2, value=st_crs(test1))  #used to be test1.c=st_set_crs(test1, value=st_crs(test2)) and all test2.c (below) set to test2 and all test1 set to test1.c, switch again if you get this error: "st_crs(x) == st_crs(y) is not TRUE"
   #move through if() loops
     if(st_intersects(test1, test2.c, sparse=F) == TRUE){
       focal.poly = repeat.rot.fun(poly1, test2.c, degrees) #returns only moved/focal object
