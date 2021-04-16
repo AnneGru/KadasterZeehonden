@@ -126,9 +126,16 @@ repeat.rot.fun <- function(poly1, test2, degrees) {
           test1.c.moved = st_set_crs(test1.moved, value=st_crs(test2))
           poly = poly1.moved #new round should be done with the moved poly
           # exit if the condition is met or if all 360 degrees were attempted (it will automatically after for-loop ends)
-          if (st_intersects(test1.c.moved, test2, sparse=F) == FALSE) break}
-        if (st_intersects(test1.c.moved, test2, sparse=F) == FALSE) break # nog een break om uit de REPEAT te komen
-     }
+          
+          ###################################################################
+          # Geert changed below
+          #if (st_intersects(test1.c.moved, test2, sparse=F) == FALSE) break}
+          #if (st_intersects(test1.c.moved, test2, sparse=F) == FALSE) break # nog een break om uit de REPEAT te komen
+          if (sum(st_intersects(test1.c.moved, test2, sparse=F)) == 0) break} 
+          if (sum(st_intersects(test1.c.moved, test2, sparse=F)) == 0) break 
+          ###################################################################
+        
+        }
     final.rot.poly = poly
     return(final.rot.poly)
 }
@@ -150,11 +157,36 @@ repeat.move.fun <- function(poly1, test2, dirx, diry) {
         test1.c.moved = st_set_crs(test1.moved, value=st_crs(test2))
         poly = poly1.moved #new round should be done with the moved poly
         # exit if the condition is met:
+        
         if (st_intersects(test1.c.moved, test2, sparse=F) == FALSE) break}
+       
       final.poly = poly
       return(final.poly)
 }
     
+
+# GEERT: CHANGED THE FUNCTION. WITH FOR LOOP, REPEAT WAS NOT NEEDED
+# ALSO OVERLAP IS NOW BETWEEN FOCAL POLY AND ALL OTHER ONES
+
+# Create function for rotation (WORKS)
+degrees = c(seq(10,360, by=10))
+# if...intersect
+repeat.rot.fun <- function(poly1, test2, degrees) {
+  poly = poly1 #start with original poly1
+  counter=0
+    for (j in 1:length(degrees)) {
+      poly1.moved = elide(poly, shift=c(0,0), rotate = degrees[j],
+                          center=coordinates(poly)) ## LET OP
+      test1.moved = st_as_sf(poly1.moved) #transform objects you have so far to sf
+      test1.c.moved = st_set_crs(test1.moved, value=st_crs(test2))
+      poly = poly1.moved #new round should be done with the moved poly
+      if (sum(st_intersects(test1.c.moved, test2, sparse=F)) == 0) break} 
+   
+  final.rot.poly = poly
+  return(final.rot.poly)
+}
+
+
 
 #### final movement loop ####
 # Before looping set parameters
@@ -163,6 +195,67 @@ dx =  coordinates(rpoints.kde)[,1] - centroids.nf[,1]
 dy =  coordinates(rpoints.kde)[,2] - centroids.nf[,2]
 polygons.shifted = nf[0,]
 dir = c(-1, 1) #pick constant direction
+
+## NEW SUGGESTION GEERT
+for (i in 1:length(nf)){
+  print(i)
+  # Create first shifted polygon, no existing ones, so no intersect
+    if (i==1) focal.poly = elide(nf[i,], shift=c(dx[i], dy[i])) 
+    
+  # For all others, shift polygon and test for intersction
+    if (i!=1) {
+      
+    # Move polgyon  
+      focal.poly = elide(nf[i,], shift=c(dx[i], dy[i])) 
+    
+    # Check if overlap with ALL existing polygons
+      
+      # Create st objects with same crs
+        test1 = st_as_sf(focal.poly)
+        test2 = st_as_sf(polygons.shifted)
+        test2.c = st_set_crs(test2, value=st_crs(test1))  #used to be test1.c=st_set_crs(test1, value=st_crs(test2)) and all test2.c (below) set to test2 and all test1 set to test1.c, switch again if you get this error: "st_crs(x) == st_crs(y) is not TRUE"
+        
+      # Check if it overlaps with any of the existing polygons, if yes rotate loop  
+        if(sum(st_intersects(test1, test2.c, sparse=F)) >=1){
+          focal.poly = repeat.rot.fun(focal.poly, test2.c, degrees) #returns only moved/focal object
+        }
+        
+      # Check if still overlaps, if yes move.  
+       if (sum(st_intersects(test1, test2.c, sparse=F)) >=1){
+        dirx = sample(dir, size=1, replace=T) # set a fixed direction + or - for x
+        diry = sample(dir, size=1, replace=T) # set direction +- for y
+        focal.poly = repeat.move.fun(focal.poly, test2.c, dirx, diry) #returns only the moved/focal object
+        
+      }
+    }
+      
+    # bind new polygon to the others:
+     polygons.shifted = bind(polygons.shifted, focal.poly) #bind old & new poly's
+      
+}
+
+
+  #create variables for checking/avoiding intersection:
+  for (k in 1:length(polygons.shifted)){ #intersection should be tested with each already moved polygon seperately
+    poly1 = polygons.shifted[k,] #maybe [,] or [k-1] ? #already fixed polygons: polygons.shifted[-i,]
+    poly2 = focal.poly[i] #polygons.shifted[i,]
+    test1 = st_as_sf(poly1)
+    test2 = st_as_sf(poly2)
+    test2.c = st_set_crs(test2, value=st_crs(test1))  #used to be test1.c=st_set_crs(test1, value=st_crs(test2)) and all test2.c (below) set to test2 and all test1 set to test1.c, switch again if you get this error: "st_crs(x) == st_crs(y) is not TRUE"
+    #move through if() loops
+    if(st_intersects(test1, test2.c, sparse=F) == TRUE){
+      focal.poly = repeat.rot.fun(poly1, test2.c, degrees) #returns only moved/focal object
+    }
+    if (st_intersects(test1, test2.c, sparse=F) == TRUE){
+      dirx = sample(dir, size=1, replace=T) # set a fixed direction + or - for x
+      diry = sample(dir, size=1, replace=T) # set direction +- for y
+      focal.poly = repeat.rot.fun(poly1, test2.c, dirx, diry) #returns only the moved/focal object
+    }}
+  #bind new polygon to the others:
+  polygons.shifted = bind(polygons.shifted, focal.poly) #bind old & new poly's
+}
+
+
 
 ## THIS LOOP NEEDS TO BE FIXED:
 for (i in 1:length(nf)){
@@ -186,6 +279,9 @@ for (i in 1:length(nf)){
   #bind new polygon to the others:
   polygons.shifted = bind(polygons.shifted, focal.poly) #bind old & new poly's
 }
+
+
+
 
 
 
